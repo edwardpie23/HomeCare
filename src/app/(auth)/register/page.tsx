@@ -53,7 +53,7 @@ function RegisterForm() {
       redirect: false,
     });
 
-    router.push(role === "contractor" ? "/contractor/dashboard" : "/get-estimate");
+    router.push(role === "contractor" ? "/contractor/dashboard" : "/my-jobs");
     router.refresh();
   }
 

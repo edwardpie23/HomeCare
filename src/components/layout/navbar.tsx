@@ -32,21 +32,23 @@ export default function Navbar() {
 
             {session ? (
               <>
-                {session.user.role === "contractor" ? (
-                  <Link href="/contractor/dashboard">
-                    <Button variant="outline" size="sm">Dashboard</Button>
-                  </Link>
-                ) : (
+                <Link href="/dashboard">
+                  <Button variant="outline" size="sm">My Dashboard</Button>
+                </Link>
+                {session.user.role === "customer" && (
                   <Link href="/get-estimate">
-                    <Button size="sm">Get Estimate</Button>
+                    <Button size="sm">+ New Estimate</Button>
                   </Link>
                 )}
-                <button
-                  onClick={() => signOut({ callbackUrl: "/" })}
-                  className="text-slate-500 hover:text-slate-700 text-sm"
-                >
-                  Sign Out
-                </button>
+                <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
+                  <span className="text-sm text-slate-600 font-medium">{session.user.name?.split(" ")[0]}</span>
+                  <button
+                    onClick={() => signOut({ callbackUrl: "/" })}
+                    className="text-slate-400 hover:text-slate-700 text-sm"
+                  >
+                    Sign Out
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -82,12 +84,11 @@ export default function Navbar() {
             <Link href="/for-contractors" className="block text-slate-600 text-sm py-1">For Contractors</Link>
             {session ? (
               <>
-                {session.user.role === "contractor" ? (
-                  <Link href="/contractor/dashboard" className="block"><Button size="sm" className="w-full">Dashboard</Button></Link>
-                ) : (
-                  <Link href="/get-estimate" className="block"><Button size="sm" className="w-full">Get Estimate</Button></Link>
+                <Link href="/dashboard" className="block"><Button size="sm" className="w-full">My Dashboard</Button></Link>
+                {session.user.role === "customer" && (
+                  <Link href="/get-estimate" className="block"><Button variant="outline" size="sm" className="w-full">+ New Estimate</Button></Link>
                 )}
-                <button onClick={() => signOut({ callbackUrl: "/" })} className="block text-slate-500 text-sm py-1">Sign Out</button>
+                <button onClick={() => signOut({ callbackUrl: "/" })} className="block text-slate-500 text-sm py-1">Sign Out ({session.user.name?.split(" ")[0]})</button>
               </>
             ) : (
               <>
