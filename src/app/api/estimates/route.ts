@@ -4,8 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import Anthropic from "@anthropic-ai/sdk";
 import { buildSizeMathPrompt } from "@/lib/pricing";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { anthropic } from "@/lib/anthropic";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);

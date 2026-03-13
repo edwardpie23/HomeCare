@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { JOB_CATEGORIES } from "@/lib/utils";
 import { buildSizeMathPrompt } from "@/lib/pricing";
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import { anthropic } from "@/lib/anthropic";
 
 export async function POST(request: NextRequest) {
   let categoryId = "";
