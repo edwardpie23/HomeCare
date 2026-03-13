@@ -101,9 +101,9 @@ export default function MyJobsPage() {
             {jobs.map((job) => {
               const aiEstimate = job.estimates.find((e) => e.isAiGenerated);
               return (
+                <Link key={job.id} href={`/my-jobs/${job.id}`} className="block">
                 <div
-                  key={job.id}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-slate-300 transition-all"
+                  className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-orange-300 hover:shadow-sm transition-all cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-3 flex-1">
@@ -159,16 +159,11 @@ export default function MyJobsPage() {
                     </div>
                   )}
 
-                  {!job.booking && job.status === "estimated" && (
-                    <div className="mt-4 flex gap-2">
-                      <Link href="/get-estimate" className="flex-1">
-                        <Button variant="outline" size="sm" className="w-full">
-                          Book a Contractor
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
+                  <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
+                    <span className="text-xs text-orange-500 font-medium">View full details →</span>
+                  </div>
                 </div>
+                </Link>
               );
             })}
           </div>

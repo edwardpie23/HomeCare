@@ -124,10 +124,8 @@ export default function ContractorLeadsPage() {
             {leads.map((lead) => {
               const estimate = lead.estimates[0];
               return (
-                <div
-                  key={lead.id}
-                  className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-orange-300 transition-all"
-                >
+                <div key={lead.id} className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-orange-300 transition-all">
+                  <Link href={`/contractor/leads/${lead.id}`} className="block">
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -174,22 +172,10 @@ export default function ContractorLeadsPage() {
                           <div className="text-xs text-slate-400">AI estimate range</div>
                         </div>
                       )}
-
-                      <div className="space-y-2">
-                        <Button
-                          size="sm"
-                          className="w-full sm:w-auto"
-                          isLoading={claiming === lead.id}
-                          onClick={() => claimLead(lead.id, estimate?.avgPrice || 0)}
-                        >
-                          Claim Lead — $15 fee
-                        </Button>
-                        <p className="text-xs text-slate-400 text-center">
-                          Lead fee charged on booking
-                        </p>
-                      </div>
+                      <span className="text-xs text-orange-500 font-medium">View & Quote →</span>
                     </div>
                   </div>
+                  </Link>
                 </div>
               );
             })}
