@@ -6,6 +6,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { buildSizeMathPrompt } from "@/lib/pricing";
 import { anthropic } from "@/lib/anthropic";
 import { sendQuoteReceivedEmail } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 import { readFile } from "fs/promises";
 import path from "path";
 
@@ -141,21 +142,30 @@ Return ONLY valid JSON:
       },
     });
 
-    // Notify customer by email
+    // In-app + email notification for customer
     const jobWithUser = await prisma.jobRequest.findUnique({
       where: { id: jobRequestId },
       include: { user: { select: { name: true, email: true } } },
     });
-    if (jobWithUser?.user?.email) {
-      await sendQuoteReceivedEmail({
-        customerEmail: jobWithUser.user.email,
-        customerName: jobWithUser.user.name || "Customer",
-        jobTitle: jobWithUser.title,
-        jobId: jobRequestId,
-        contractorName: contractor.businessName,
-        minPrice: parseFloat(minPrice),
-        maxPrice: parseFloat(maxPrice),
+    if (jobWithUser) {
+      await createNotification({
+        userId: jobWithUser.userId,
+        type: "quote_received",
+        title: "New contractor quote",
+        body: `${contractor.businessName} submitted a quote for "${jobWithUser.title}"`,
+        link: `/my-jobs/${jobRequestId}`,
       });
+      if (jobWithUser.user?.email) {
+        await sendQuoteReceivedEmail({
+          customerEmail: jobWithUser.user.email,
+          customerName: jobWithUser.user.name || "Customer",
+          jobTitle: jobWithUser.title,
+          jobId: jobRequestId,
+          contractorName: contractor.businessName,
+          minPrice: parseFloat(minPrice),
+          maxPrice: parseFloat(maxPrice),
+        });
+      }
     }
 
     return NextResponse.json({ success: true, estimate });

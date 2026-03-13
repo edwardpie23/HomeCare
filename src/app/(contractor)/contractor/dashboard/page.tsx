@@ -312,6 +312,19 @@ function DashboardContent() {
                     </div>
                   </button>
                 </Link>
+                {bookings.filter(b => b.status !== "completed" && b.status !== "cancelled").length > 0 && (
+                  bookings.filter(b => b.status !== "completed" && b.status !== "cancelled").slice(0,2).map(b => (
+                    <Link key={b.id} href={`/contractor/bookings/${b.id}`} className="block">
+                      <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-blue-100 bg-blue-50 text-left transition-all">
+                        <span className="text-2xl">{b.jobRequest.category.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-900 text-sm truncate">{b.jobRequest.title}</p>
+                          <p className="text-slate-400 text-xs capitalize">{b.status.replace("_"," ")} · {b.customer.name}</p>
+                        </div>
+                      </button>
+                    </Link>
+                  ))
+                )}
                 <Link href="/contractor/pricing" className="block">
                   <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all">
                     <span className="text-2xl">💲</span>

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendQuoteAcceptedEmail } from "@/lib/email";
+import { createNotification } from "@/lib/notifications";
 
 export async function POST(
   _request: NextRequest,
@@ -66,6 +67,17 @@ export async function POST(
     },
     data: { status: "declined" },
   });
+
+  // In-app notification for contractor
+  if (estimate.contractor) {
+    await createNotification({
+      userId: estimate.contractor.userId,
+      type: "quote_accepted",
+      title: "Quote accepted!",
+      body: `${estimate.jobRequest.user.name || "A customer"} accepted your quote for "${estimate.jobRequest.title}"`,
+      link: `/contractor/bookings/${booking.id}`,
+    });
+  }
 
   // Email the contractor
   if (estimate.contractor?.user?.email) {

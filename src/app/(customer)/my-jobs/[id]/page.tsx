@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
+import { useEffect, useState, use, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/utils";
+
+interface Message {
+  id: string;
+  body: string;
+  senderRole: string;
+  createdAt: string;
+  sender: { name: string | null; role: string };
+}
 
 interface Job {
   id: string;
@@ -93,6 +101,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [deleting, setDeleting] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // Messaging state
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const [sendingMsg, setSendingMsg] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
   // Review form state
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -125,6 +139,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               size: d.job.size?.toString() || "",
               address: d.job.address || "",
             });
+            // Load messages if there's a booking
+            if (d.job.booking?.id) {
+              fetch(`/api/messages?bookingId=${d.job.booking.id}`)
+                .then((r) => r.json())
+                .then((m) => setMessages(m.messages || []));
+            }
           }
           setLoading(false);
         });
@@ -193,6 +213,27 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       );
     }
     setActionLoading(null);
+  }
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  async function sendMessage(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newMessage.trim() || sendingMsg || !job?.booking?.id) return;
+    setSendingMsg(true);
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingId: job.booking.id, body: newMessage }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setMessages((prev) => [...prev, data.message]);
+      setNewMessage("");
+    }
+    setSendingMsg(false);
   }
 
   async function handleReviewSubmit(e: React.FormEvent) {
@@ -641,6 +682,53 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <p className="text-orange-700 text-sm">
               Contractors will submit quotes soon. You'll be able to accept or decline them here.
             </p>
+          </div>
+        )}
+
+        {/* Messaging — only when booked */}
+        {job.booking && (
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-5">
+            <div className="p-4 border-b border-slate-100">
+              <h2 className="font-bold text-slate-900">💬 Messages with {job.booking.contractor.businessName}</h2>
+            </div>
+
+            <div className="p-4 space-y-3 overflow-y-auto" style={{ maxHeight: "320px" }}>
+              {messages.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-slate-400 text-sm">No messages yet. Say hello!</p>
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const isMine = msg.senderRole === "customer";
+                  return (
+                    <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-xs rounded-2xl px-4 py-2.5 ${
+                        isMine ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-900"
+                      }`}>
+                        <p className="text-sm">{msg.body}</p>
+                        <p className={`text-xs mt-1 ${isMine ? "text-orange-200" : "text-slate-400"}`}>
+                          {formatDate(msg.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form onSubmit={sendMessage} className="p-4 border-t border-slate-100 flex gap-2">
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Type a message..."
+                className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+              <Button type="submit" size="sm" isLoading={sendingMsg} disabled={!newMessage.trim()}>
+                Send
+              </Button>
+            </form>
           </div>
         )}
       </div>
