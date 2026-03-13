@@ -20,13 +20,14 @@ export async function GET(
       category: true,
       estimates: {
         include: {
-          contractor: { select: { businessName: true, phone: true, city: true, state: true, isVerified: true } },
+          contractor: { select: { id: true, businessName: true, phone: true, city: true, state: true, isVerified: true } },
         },
         orderBy: { createdAt: "desc" },
       },
       booking: {
         include: {
-          contractor: { select: { businessName: true, phone: true, city: true, state: true, isVerified: true } },
+          contractor: { select: { id: true, businessName: true, phone: true, city: true, state: true, isVerified: true } },
+          review: { select: { id: true } },
         },
       },
       user: { select: { name: true, email: true } },

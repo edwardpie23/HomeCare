@@ -23,6 +23,7 @@ model User {
   jobRequests JobRequest[]
   contractor  Contractor?
   bookings    Booking[]
+  reviews     Review[]
 }
 
 model Account {
@@ -89,6 +90,7 @@ model Contractor {
   bookings         Booking[]
   estimates        Estimate[]
   builderEstimates ContractorEstimate[]
+  reviews          Review[]
 }
 
 model ContractorEstimate {
@@ -183,6 +185,7 @@ model Estimate {
   notes        String?
   validUntil   DateTime?
   isAiGenerated Boolean  @default(false)
+  status       String    @default("pending") // pending | accepted | declined
   createdAt    DateTime  @default(now())
 
   jobRequest JobRequest  @relation(fields: [jobRequestId], references: [id], onDelete: Cascade)
@@ -222,4 +225,19 @@ model Booking {
   jobRequest JobRequest @relation(fields: [jobRequestId], references: [id])
   customer   User       @relation(fields: [customerId], references: [id])
   contractor Contractor @relation(fields: [contractorId], references: [id])
+  review     Review?
+}
+
+model Review {
+  id           String   @id @default(cuid())
+  bookingId    String   @unique
+  contractorId String
+  customerId   String
+  rating       Int      // 1-5
+  comment      String?
+  createdAt    DateTime @default(now())
+
+  booking    Booking    @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  contractor Contractor @relation(fields: [contractorId], references: [id])
+  customer   User       @relation(fields: [customerId], references: [id])
 }

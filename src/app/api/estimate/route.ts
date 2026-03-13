@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { JOB_CATEGORIES } from "@/lib/utils";
 import { buildSizeMathPrompt } from "@/lib/pricing";
 import { anthropic } from "@/lib/anthropic";
+import { readFile } from "fs/promises";
+import path from "path";
 
 export async function POST(request: NextRequest) {
   let categoryId = "";
@@ -31,6 +33,21 @@ export async function POST(request: NextRequest) {
             type: "image",
             source: { type: "base64", media_type: mediaType, data: base64Data },
           });
+        } else if (photo.startsWith("/uploads/")) {
+          // Real uploaded file — read from disk
+          try {
+            const filePath = path.join(process.cwd(), "public", photo);
+            const buffer = await readFile(filePath);
+            const ext = photo.split(".").pop()?.toLowerCase() || "jpg";
+            const mediaTypeMap: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif" };
+            const mediaType = (mediaTypeMap[ext] || "image/jpeg") as "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+            messageContent.push({
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: buffer.toString("base64") },
+            });
+          } catch {
+            // skip unreadable files
+          }
         }
       }
     }

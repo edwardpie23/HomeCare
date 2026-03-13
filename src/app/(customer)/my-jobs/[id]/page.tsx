@@ -30,15 +30,18 @@ interface Job {
     breakdown: string | null;
     notes: string | null;
     isAiGenerated: boolean;
+    status: string;
     createdAt: string;
-    contractor: { businessName: string; isVerified: boolean } | null;
+    contractor: { id: string; businessName: string; isVerified: boolean } | null;
   }[];
   booking: {
+    id: string;
     status: string;
     agreedPrice: number;
     scheduledDate: string | null;
     notes: string | null;
-    contractor: { businessName: string; phone: string; city: string; state: string; isVerified: boolean };
+    contractor: { id: string; businessName: string; phone: string; city: string; state: string; isVerified: boolean };
+    review: { id: string } | null;
   } | null;
   user: { name: string | null; email: string };
 }
@@ -57,6 +60,26 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-100 text-red-600",
 };
 
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((s) => (
+        <button
+          key={s}
+          type="button"
+          onMouseEnter={() => setHover(s)}
+          onMouseLeave={() => setHover(0)}
+          onClick={() => onChange(s)}
+          className={`text-2xl transition-colors ${s <= (hover || value) ? "text-yellow-400" : "text-slate-200"}`}
+        >
+          ★
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { status } = useSession();
@@ -67,6 +90,15 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Review form state
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewDone, setReviewDone] = useState(false);
+
   const [form, setForm] = useState({
     title: "",
     description: "",
@@ -116,6 +148,75 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     setSaving(false);
   }
 
+  async function handleDelete() {
+    if (!confirm("Delete this job? This cannot be undone.")) return;
+    setDeleting(true);
+    const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      router.push("/my-jobs");
+    } else {
+      const d = await res.json();
+      alert(d.error || "Could not delete job.");
+      setDeleting(false);
+    }
+  }
+
+  async function handleAccept(estimateId: string, avgPrice: number) {
+    if (!confirm(`Accept this quote for ${formatCurrency(avgPrice)}? This will book the contractor.`)) return;
+    setActionLoading(estimateId);
+    const res = await fetch(`/api/estimates/${estimateId}/accept`, { method: "POST" });
+    const data = await res.json();
+    if (res.ok) {
+      // Refresh job data
+      const d = await fetch(`/api/jobs/${id}`).then((r) => r.json());
+      if (d.job) setJob(d.job);
+    } else {
+      alert(data.error || "Could not accept quote.");
+    }
+    setActionLoading(null);
+  }
+
+  async function handleDecline(estimateId: string) {
+    if (!confirm("Decline this quote?")) return;
+    setActionLoading(estimateId);
+    const res = await fetch(`/api/estimates/${estimateId}/decline`, { method: "POST" });
+    if (res.ok) {
+      setJob((prev) =>
+        prev
+          ? {
+              ...prev,
+              estimates: prev.estimates.map((e) =>
+                e.id === estimateId ? { ...e, status: "declined" } : e
+              ),
+            }
+          : prev
+      );
+    }
+    setActionLoading(null);
+  }
+
+  async function handleReviewSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!job?.booking?.id) return;
+    setReviewSubmitting(true);
+    const res = await fetch("/api/reviews", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bookingId: job.booking.id,
+        rating: reviewRating,
+        comment: reviewComment,
+      }),
+    });
+    if (res.ok) {
+      setReviewDone(true);
+      setJob((prev) =>
+        prev && prev.booking ? { ...prev, booking: { ...prev.booking, review: { id: "done" } } } : prev
+      );
+    }
+    setReviewSubmitting(false);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -143,19 +244,28 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const aiEstimate = job.estimates.find((e) => e.isAiGenerated);
   const contractorEstimates = job.estimates.filter((e) => !e.isAiGenerated);
   const canEdit = job.status !== "booked" && job.status !== "completed";
+  const canDelete = job.status !== "booked" && job.status !== "completed";
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4">
       <div className="max-w-3xl mx-auto">
 
         {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <Link href="/my-jobs">
-            <Button variant="ghost" size="sm">← My Jobs</Button>
-          </Link>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColors[job.status] || "bg-slate-100 text-slate-600"}`}>
-            {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-          </span>
+        <div className="flex items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/my-jobs">
+              <Button variant="ghost" size="sm">← My Jobs</Button>
+            </Link>
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColors[job.status] || "bg-slate-100 text-slate-600"}`}>
+              {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+            </span>
+          </div>
+          {canDelete && (
+            <Button variant="ghost" size="sm" isLoading={deleting} onClick={handleDelete}
+              className="text-red-400 hover:text-red-600 hover:bg-red-50">
+              🗑 Delete Job
+            </Button>
+          )}
         </div>
 
         {saved && (
@@ -367,31 +477,90 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
         )}
 
-        {/* Contractor Estimates */}
+        {/* Contractor Quotes with Accept/Decline */}
         {contractorEstimates.length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-5">
-            <h2 className="font-bold text-slate-900 mb-4">📋 Contractor Quotes ({contractorEstimates.length})</h2>
+            <h2 className="font-bold text-slate-900 mb-4">
+              📋 Contractor Quotes ({contractorEstimates.length})
+            </h2>
             <div className="space-y-4">
-              {contractorEstimates.map((est) => (
-                <div key={est.id} className="border border-slate-100 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-900 text-sm">
-                        {est.contractor?.businessName || "Contractor"}
-                      </span>
-                      {est.contractor?.isVerified && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">✓ Verified</span>
-                      )}
+              {contractorEstimates.map((est) => {
+                const isAccepted = est.status === "accepted";
+                const isDeclined = est.status === "declined";
+                const isPending = est.status === "pending";
+
+                return (
+                  <div
+                    key={est.id}
+                    className={`border rounded-xl p-4 transition-colors ${
+                      isAccepted
+                        ? "border-green-200 bg-green-50"
+                        : isDeclined
+                        ? "border-slate-100 bg-slate-50 opacity-60"
+                        : "border-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {est.contractor && (
+                          <Link
+                            href={`/contractors/${est.contractor.id}`}
+                            className="font-semibold text-slate-900 text-sm hover:text-orange-600 transition-colors"
+                          >
+                            {est.contractor.businessName}
+                          </Link>
+                        )}
+                        {est.contractor?.isVerified && (
+                          <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">✓ Verified</span>
+                        )}
+                        {isAccepted && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-semibold">✓ Accepted</span>
+                        )}
+                        {isDeclined && (
+                          <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">Declined</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-400">{formatDate(est.createdAt)}</span>
                     </div>
-                    <span className="text-xs text-slate-400">{formatDate(est.createdAt)}</span>
+
+                    <div className="text-2xl font-black text-slate-900">
+                      {formatCurrency(est.minPrice)} – {formatCurrency(est.maxPrice)}
+                    </div>
+                    <p className="text-slate-500 text-xs mt-0.5">Avg: {formatCurrency(est.avgPrice)}</p>
+                    {est.notes && <p className="text-slate-600 text-sm mt-2">{est.notes}</p>}
+
+                    {/* Accept / Decline buttons */}
+                    {isPending && !job.booking && (
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
+                        <Button
+                          size="sm"
+                          isLoading={actionLoading === est.id}
+                          onClick={() => handleAccept(est.id, est.avgPrice)}
+                          className="bg-green-500 hover:bg-green-600 text-white"
+                        >
+                          ✓ Accept Quote
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          isLoading={actionLoading === est.id}
+                          onClick={() => handleDecline(est.id)}
+                          className="text-red-500 border-red-200 hover:bg-red-50"
+                        >
+                          ✕ Decline
+                        </Button>
+                        {est.contractor && (
+                          <Link href={`/contractors/${est.contractor.id}`}>
+                            <Button size="sm" variant="ghost" className="text-slate-500">
+                              View Profile
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-2xl font-black text-slate-900">
-                    {formatCurrency(est.minPrice)} – {formatCurrency(est.maxPrice)}
-                  </div>
-                  <p className="text-slate-500 text-xs mt-0.5">Avg: {formatCurrency(est.avgPrice)}</p>
-                  {est.notes && <p className="text-slate-600 text-sm mt-2">{est.notes}</p>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -403,7 +572,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <p className="font-bold text-green-900">{job.booking.contractor.businessName}</p>
+                  <Link
+                    href={`/contractors/${job.booking.contractor.id}`}
+                    className="font-bold text-green-900 hover:text-green-700 transition-colors"
+                  >
+                    {job.booking.contractor.businessName}
+                  </Link>
                   {job.booking.contractor.isVerified && (
                     <span className="text-xs bg-green-200 text-green-800 px-1.5 py-0.5 rounded-full">✓ Verified</span>
                   )}
@@ -431,18 +605,42 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
         )}
 
-        {/* CTA if not booked yet */}
-        {!job.booking && job.status === "estimated" && (
-          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 text-center">
-            <p className="text-orange-900 font-semibold mb-2">Ready to book a contractor?</p>
-            <p className="text-orange-700 text-sm mb-4">
-              {contractorEstimates.length > 0
-                ? `You have ${contractorEstimates.length} contractor quote(s) above.`
-                : "Contractors will submit quotes soon. We'll notify you when they arrive."}
+        {/* Review form (completed jobs without review) */}
+        {job.booking && job.status === "completed" && !job.booking.review && !reviewDone && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6 mb-5">
+            <h2 className="font-bold text-slate-900 mb-1">⭐ Leave a Review</h2>
+            <p className="text-slate-500 text-sm mb-4">
+              How did {job.booking.contractor.businessName} do?
             </p>
-            <Link href="/get-estimate">
-              <Button variant="outline" size="sm">Browse Contractors</Button>
-            </Link>
+            <form onSubmit={handleReviewSubmit} className="space-y-4">
+              <StarPicker value={reviewRating} onChange={setReviewRating} />
+              <textarea
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={3}
+                placeholder="Share your experience (optional)..."
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-900 resize-none text-sm"
+              />
+              <Button type="submit" isLoading={reviewSubmitting} size="sm">
+                Submit Review
+              </Button>
+            </form>
+          </div>
+        )}
+
+        {(reviewDone || (job.booking?.review && job.status === "completed")) && (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-4 mb-5 text-center">
+            <p className="text-green-700 font-semibold">✓ Review submitted — thank you!</p>
+          </div>
+        )}
+
+        {/* CTA if not booked yet */}
+        {!job.booking && job.status === "estimated" && contractorEstimates.length === 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 text-center">
+            <p className="text-orange-900 font-semibold mb-2">Waiting for contractor quotes</p>
+            <p className="text-orange-700 text-sm">
+              Contractors will submit quotes soon. You'll be able to accept or decline them here.
+            </p>
           </div>
         )}
       </div>

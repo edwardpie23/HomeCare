@@ -43,19 +43,25 @@ function GetEstimateFlow() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [savedJobId, setSavedJobId] = useState("");
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const category = JOB_CATEGORIES.find((c) => c.id === selectedCategory);
 
-  function handlePhotoUpload(files: FileList | null) {
-    if (!files) return;
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPhotos((prev) => [...prev, e.target?.result as string].slice(0, 5));
-      };
-      reader.readAsDataURL(file);
-    });
+  async function handlePhotoUpload(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploadingPhotos(true);
+    const uploads = Array.from(files).slice(0, 5 - photos.length);
+    const urls: string[] = [];
+    for (const file of uploads) {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.url) urls.push(data.url);
+    }
+    setPhotos((prev) => [...prev, ...urls].slice(0, 5));
+    setUploadingPhotos(false);
   }
 
   async function getEstimate() {
@@ -234,12 +240,14 @@ function GetEstimateFlow() {
                   <span className="text-slate-400 font-normal">(recommended — improves accuracy)</span>
                 </label>
                 <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center cursor-pointer hover:border-orange-400 hover:bg-orange-50 transition-all"
+                  onClick={() => !uploadingPhotos && fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${uploadingPhotos ? "border-orange-300 bg-orange-50 cursor-wait" : "border-slate-200 cursor-pointer hover:border-orange-400 hover:bg-orange-50"}`}
                 >
-                  <div className="text-4xl mb-3">📸</div>
-                  <p className="text-slate-600 font-medium">Click to upload photos</p>
-                  <p className="text-slate-400 text-sm mt-1">JPG, PNG up to 10MB each · Max 5 photos</p>
+                  <div className="text-4xl mb-3">{uploadingPhotos ? "⏳" : "📸"}</div>
+                  <p className="text-slate-600 font-medium">
+                    {uploadingPhotos ? "Uploading..." : "Click to upload photos"}
+                  </p>
+                  <p className="text-slate-400 text-sm mt-1">JPG, PNG, WebP up to 5MB each · Max 5 photos</p>
                   <input
                     ref={fileInputRef}
                     type="file"
