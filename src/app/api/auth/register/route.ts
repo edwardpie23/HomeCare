@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, userId: user.id }, { status: 201 });
   } catch (error) {
     console.error("Register error:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "development" ? message : "Internal server error" },
+      { status: 500 }
+    );
   }
 }
