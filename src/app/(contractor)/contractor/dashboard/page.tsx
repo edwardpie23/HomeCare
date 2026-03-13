@@ -321,6 +321,15 @@ function DashboardContent() {
                     </div>
                   </button>
                 </Link>
+                <Link href="/contractor/estimate-builder" className="block">
+                  <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-orange-200 bg-orange-50 text-left transition-all">
+                    <span className="text-2xl">📋</span>
+                    <div>
+                      <p className="font-medium text-slate-900 text-sm">Estimate Builder</p>
+                      <p className="text-slate-400 text-xs">Create & download PDF estimates</p>
+                    </div>
+                  </button>
+                </Link>
                 <button
                   className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all"
                   onClick={handleSubscribe}
