@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { JOB_CATEGORIES } from "@/lib/utils";
+import { buildSizeMathPrompt } from "@/lib/pricing";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(request: NextRequest) {
   let categoryId = "";
@@ -18,33 +17,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid category" }, { status: 400 });
     }
 
-    let aiAnalysis = null;
-    let minPrice = category.baseMinPrice;
-    let maxPrice = category.baseMaxPrice;
+    const sizeNum = size ? parseFloat(size) : null;
+    const sizeMath = buildSizeMathPrompt(categoryId, sizeNum, city, state);
 
-    // Build message content
     const messageContent: Anthropic.MessageParam["content"] = [];
 
-    // Add photos if provided
     if (photos && photos.length > 0) {
       for (const photo of photos.slice(0, 3)) {
-        // Limit to 3 photos
         if (photo.startsWith("data:image/")) {
           const [mediaTypePart, base64Data] = photo.split(",");
-          const mediaType = mediaTypePart
-            .split(":")[1]
-            .split(";")[0] as
-            | "image/jpeg"
-            | "image/png"
-            | "image/gif"
-            | "image/webp";
+          const mediaType = mediaTypePart.split(":")[1].split(";")[0] as
+            | "image/jpeg" | "image/png" | "image/gif" | "image/webp";
           messageContent.push({
             type: "image",
-            source: {
-              type: "base64",
-              media_type: mediaType,
-              data: base64Data,
-            },
+            source: { type: "base64", media_type: mediaType, data: base64Data },
           });
         }
       }
@@ -55,56 +41,51 @@ export async function POST(request: NextRequest) {
 Job Category: ${category.name}
 Location: ${city || "Unknown"}, ${state || "Unknown"}
 ${description ? `Customer Description: ${description}` : ""}
-${size ? `Size/Area: ${size} ${category.unit}` : ""}
-${photos && photos.length > 0 ? `Photos provided: ${photos.length} photo(s) attached above.` : "No photos provided."}
+${sizeNum ? `Size/Area: ${sizeNum} ${category.unit}` : ""}
+${photos?.length > 0 ? `Photos: ${photos.length} attached above — analyze carefully.` : "No photos provided."}
+${sizeMath}
 
-${photos && photos.length > 0 ? "Analyze the photo(s) carefully to assess:" : "Based on the job category, estimate:"}
-1. The scope and complexity of the work
-2. What specific repairs or work is needed
-3. Materials required
-4. Labor time estimate
-5. Any potential complications
+${photos?.length > 0 ? "Examine the photos closely to assess scope and condition." : "Estimate based on the category and description."}
 
-Then provide a cost estimate in this EXACT JSON format (no other text):
+RULES:
+1. Start from the size-based calculation above — never return a generic flat number
+2. A 200 ${category.unit} job and a 1,500 ${category.unit} job must produce very different prices
+3. Breakdown item costs must sum to approximately avgPrice
+4. Label labor lines with the rate used, e.g. "Labor (500 sq ft × $2.20/sq ft)"
+5. Be realistic for the ${city || "US"} market
+
+Return ONLY this JSON (no other text):
 {
-  "detected": "Brief description of what you see / the job",
+  "detected": "Brief description of what the job involves",
   "complexity": "simple|medium|complex",
-  "estimatedHours": 2.5,
-  "minPrice": 300,
-  "maxPrice": 550,
-  "avgPrice": 425,
+  "estimatedHours": 4,
+  "minPrice": 900,
+  "maxPrice": 1500,
+  "avgPrice": 1200,
   "breakdown": [
-    {"item": "Labor", "cost": 280},
-    {"item": "Materials", "cost": 120},
-    {"item": "Other fees", "cost": 25}
+    {"item": "Labor (500 sq ft × $1.80/sq ft)", "cost": 900},
+    {"item": "Paint & primer — 2 coats", "cost": 220},
+    {"item": "Prep, tape & drop cloths", "cost": 80}
   ],
-  "notes": "Any important notes about the job",
+  "notes": "Includes all labor and materials.",
   "confidence": "high|medium|low"
-}
+}`;
 
-Use realistic prices for ${city || "a typical US"} market. The base range for ${category.name} is $${category.baseMinPrice}-$${category.baseMaxPrice}.`;
-
-    messageContent.push({
-      type: "text",
-      text: prompt,
-    });
+    messageContent.push({ type: "text", text: prompt });
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: messageContent,
-        },
-      ],
+      messages: [{ role: "user", content: messageContent }],
     });
 
-    const responseText =
-      response.content[0].type === "text" ? response.content[0].text : "";
-
-    // Parse JSON from response
+    const responseText = response.content[0].type === "text" ? response.content[0].text : "";
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+
+    let aiAnalysis = null;
+    let minPrice = category.baseMinPrice;
+    let maxPrice = category.baseMaxPrice;
+
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       aiAnalysis = parsed;
@@ -128,7 +109,6 @@ Use realistic prices for ${city || "a typical US"} market. The base range for ${
     });
   } catch (error) {
     console.error("Estimate error:", error);
-    // Return fallback estimate on error
     const category = JOB_CATEGORIES.find((c) => c.id === categoryId);
     return NextResponse.json({
       success: true,
