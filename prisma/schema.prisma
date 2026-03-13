@@ -84,10 +84,55 @@ model Contractor {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  pricingRules PricingRule[]
-  bookings     Booking[]
-  estimates    Estimate[]
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pricingRules     PricingRule[]
+  bookings         Booking[]
+  estimates        Estimate[]
+  builderEstimates ContractorEstimate[]
+}
+
+model ContractorEstimate {
+  id              String   @id @default(cuid())
+  contractorId    String
+  estimateNumber  String
+  status          String   @default("draft") // draft | sent | accepted | declined
+
+  // Customer
+  customerName    String?
+  customerEmail   String?
+  customerAddress String?
+
+  // Project
+  categoryId      String?
+  projectTitle    String?
+  description     String?
+  size            Float?
+  city            String?
+  state           String?
+  urgency         String   @default("flexible")
+
+  // Pricing
+  lineItems       String   @default("[]") // JSON array of {id,item,cost,category}
+  minPrice        Float?
+  maxPrice        Float?
+  totalPrice      Float?
+  taxRate         Float    @default(0)
+  discount        Float    @default(0)
+  estimatedDays   Int?
+  validDays       Int      @default(30)
+
+  // Notes & terms
+  terms           String?
+  notes           String?
+  internalNotes   String?
+
+  // Materials list (internal only — not sent to customer)
+  materialsList   String?  // JSON array of {item,qty,unit,unitCost,total}
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
 }
 
 model JobCategory {

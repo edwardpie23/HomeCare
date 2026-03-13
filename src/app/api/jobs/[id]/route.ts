@@ -88,3 +88,28 @@ export async function PATCH(
 
   return NextResponse.json({ job: updated });
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const job = await prisma.jobRequest.findUnique({ where: { id } });
+  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (job.userId !== session.user.id && session.user.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  if (job.status === "booked" || job.status === "completed") {
+    return NextResponse.json({ error: "Cannot delete a booked or completed job" }, { status: 400 });
+  }
+
+  await prisma.jobRequest.delete({ where: { id } });
+  return NextResponse.json({ success: true });
+}

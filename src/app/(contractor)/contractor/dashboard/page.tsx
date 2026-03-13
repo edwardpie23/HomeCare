@@ -330,6 +330,24 @@ function DashboardContent() {
                     </div>
                   </button>
                 </Link>
+                <Link href="/contractor/estimates" className="block">
+                  <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all">
+                    <span className="text-2xl">📁</span>
+                    <div>
+                      <p className="font-medium text-slate-900 text-sm">My Estimates</p>
+                      <p className="text-slate-400 text-xs">View drafts, sent & accepted</p>
+                    </div>
+                  </button>
+                </Link>
+                <Link href="/contractor/payments" className="block">
+                  <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all">
+                    <span className="text-2xl">💳</span>
+                    <div>
+                      <p className="font-medium text-slate-900 text-sm">Payment History</p>
+                      <p className="text-slate-400 text-xs">Revenue, lead fees & billing</p>
+                    </div>
+                  </button>
+                </Link>
                 <button
                   className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all"
                   onClick={handleSubscribe}
