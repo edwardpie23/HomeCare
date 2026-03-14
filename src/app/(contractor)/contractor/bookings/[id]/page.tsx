@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, useRef } from "react";
+import { useEffect, useState, use, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -38,6 +38,14 @@ interface Booking {
   messages: Message[];
 }
 
+interface ChatEstimate {
+  minPrice: number;
+  maxPrice: number;
+  confidence: "low" | "medium" | "high";
+  priceNote: string;
+  scopeChanges: string[];
+}
+
 const STATUS_FLOW = ["pending", "confirmed", "in_progress", "completed"] as const;
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
@@ -52,6 +60,12 @@ const STATUS_COLORS: Record<string, string> = {
   in_progress: "bg-purple-100 text-purple-700",
   completed: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-600",
+};
+
+const confidenceColors = {
+  low: "text-red-500",
+  medium: "text-yellow-600",
+  high: "text-green-600",
 };
 
 export default function ContractorBookingDetailPage({
@@ -71,6 +85,13 @@ export default function ContractorBookingDetailPage({
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [scheduledDate, setScheduledDate] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // AI features
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [chatEstimate, setChatEstimate] = useState<ChatEstimate | null>(null);
+  const [loadingEstimate, setLoadingEstimate] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -99,6 +120,49 @@ export default function ContractorBookingDetailPage({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const refreshChatEstimate = useCallback(async () => {
+    if (!booking) return;
+    setLoadingEstimate(true);
+    try {
+      const res = await fetch("/api/messages/chat-estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChatEstimate(data);
+      }
+    } finally {
+      setLoadingEstimate(false);
+    }
+  }, [booking, id]);
+
+  // Load chat estimate once booking is ready
+  useEffect(() => {
+    if (booking) {
+      refreshChatEstimate();
+    }
+  }, [booking, refreshChatEstimate]);
+
+  async function loadSuggestions() {
+    setLoadingSuggestions(true);
+    setShowSuggestions(true);
+    try {
+      const res = await fetch("/api/messages/reply-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSuggestions(data.suggestions || []);
+      }
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }
+
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!newMessage.trim() || sending) return;
@@ -112,6 +176,10 @@ export default function ContractorBookingDetailPage({
     if (res.ok) {
       setMessages((prev) => [...prev, data.message]);
       setNewMessage("");
+      setSuggestions([]);
+      setShowSuggestions(false);
+      // Refresh estimate after new message
+      setTimeout(refreshChatEstimate, 500);
     }
     setSending(false);
   }
@@ -226,6 +294,60 @@ export default function ContractorBookingDetailPage({
             )}
           </div>
 
+          {/* Live Price Estimate from Chat */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-slate-900 text-sm">💰 Live Price Estimate</h3>
+              <button
+                onClick={refreshChatEstimate}
+                disabled={loadingEstimate}
+                className="text-xs text-orange-500 hover:text-orange-700 disabled:text-slate-300 transition-colors"
+              >
+                {loadingEstimate ? "Updating…" : "Refresh"}
+              </button>
+            </div>
+
+            {loadingEstimate && !chatEstimate ? (
+              <div className="animate-pulse space-y-2">
+                <div className="h-8 bg-slate-100 rounded-lg w-3/4" />
+                <div className="h-3 bg-slate-100 rounded w-full" />
+              </div>
+            ) : chatEstimate ? (
+              <div>
+                <div className="flex items-end gap-1 mb-1">
+                  <span className="text-2xl font-black text-slate-900">
+                    {formatCurrency(chatEstimate.minPrice)}
+                  </span>
+                  <span className="text-slate-400 text-sm mb-0.5">–</span>
+                  <span className="text-2xl font-black text-slate-900">
+                    {formatCurrency(chatEstimate.maxPrice)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`text-xs font-medium ${confidenceColors[chatEstimate.confidence]}`}>
+                    {chatEstimate.confidence === "high" ? "● High confidence" :
+                     chatEstimate.confidence === "medium" ? "● Medium confidence" :
+                     "● Low confidence"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mb-2">{chatEstimate.priceNote}</p>
+                {chatEstimate.scopeChanges.length > 0 && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 mt-2">
+                    <p className="text-xs font-semibold text-yellow-800 mb-1">Scope changes detected:</p>
+                    <ul className="space-y-1">
+                      {chatEstimate.scopeChanges.map((change, i) => (
+                        <li key={i} className="text-xs text-yellow-700">• {change}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-xs text-slate-300 mt-2">Updates as conversation progresses</p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">Send a message to get a live estimate.</p>
+            )}
+          </div>
+
           {/* Photos */}
           {photos.length > 0 && (
             <div className="bg-white rounded-2xl border border-slate-200 p-5">
@@ -306,10 +428,47 @@ export default function ContractorBookingDetailPage({
 
         {/* Right: Message thread */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 flex flex-col" style={{ minHeight: "500px" }}>
-          <div className="p-4 border-b border-slate-100">
-            <h2 className="font-bold text-slate-900">💬 Messages with {booking.customer.name}</h2>
-            <p className="text-slate-400 text-xs mt-0.5">{booking.customer.email}</p>
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 className="font-bold text-slate-900">💬 Messages with {booking.customer.name}</h2>
+              <p className="text-slate-400 text-xs mt-0.5">{booking.customer.email}</p>
+            </div>
+            <button
+              onClick={loadSuggestions}
+              className="flex items-center gap-1.5 text-xs bg-orange-50 border border-orange-200 text-orange-600 hover:bg-orange-100 px-3 py-1.5 rounded-full font-medium transition-colors"
+            >
+              ✨ AI Replies
+            </button>
           </div>
+
+          {/* AI Reply Suggestions */}
+          {showSuggestions && (
+            <div className="px-4 pt-3 pb-0 border-b border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-500">Suggested replies</p>
+                <button onClick={() => setShowSuggestions(false)} className="text-xs text-slate-400 hover:text-slate-600">✕</button>
+              </div>
+              {loadingSuggestions ? (
+                <div className="flex gap-2 mb-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-8 bg-slate-100 rounded-xl flex-1 animate-pulse" />
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 mb-3">
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onClick={() => { setNewMessage(s); setShowSuggestions(false); }}
+                      className="text-left text-xs bg-slate-50 hover:bg-orange-50 border border-slate-200 hover:border-orange-300 text-slate-700 px-3 py-2 rounded-xl transition-all"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3" style={{ maxHeight: "400px" }}>
@@ -317,7 +476,7 @@ export default function ContractorBookingDetailPage({
               <div className="text-center py-12">
                 <div className="text-3xl mb-2">💬</div>
                 <p className="text-slate-400 text-sm">No messages yet.</p>
-                <p className="text-slate-300 text-xs mt-1">Send a message to coordinate with the customer.</p>
+                <p className="text-slate-300 text-xs mt-1">Use ✨ AI Replies to get suggested openers.</p>
               </div>
             ) : (
               messages.map((msg) => {

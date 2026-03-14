@@ -69,7 +69,13 @@ function DashboardContent() {
       fetch(`/api/contractors/profile`)
         .then((r) => r.json())
         .then((d) => {
-          if (d.contractor) setContractor(d.contractor);
+          if (d.contractor) {
+            setContractor(d.contractor);
+            // Redirect to onboarding if not completed yet
+            if (!d.contractor.onboardingDone) {
+              router.push("/contractor/onboarding");
+            }
+          }
         })
         .catch(() => setLoading(false));
 
@@ -129,6 +135,9 @@ function DashboardContent() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Link href="/contractor/analytics">
+              <Button variant="ghost" size="sm">📊 Analytics</Button>
+            </Link>
             <Link href="/contractor/leads">
               <Button variant="outline" size="sm">
                 View Leads ({availableLeads})
