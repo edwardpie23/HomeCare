@@ -93,6 +93,8 @@ model Contractor {
   estimates        Estimate[]
   builderEstimates ContractorEstimate[]
   reviews          Review[]
+  connectedAccounts ConnectedAccount[]
+  externalLeads    ExternalLead[]
 }
 
 model ContractorEstimate {
@@ -255,6 +257,65 @@ model Notification {
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ConnectedAccount {
+  id                   String    @id @default(cuid())
+  contractorId         String
+  platform             String    // thumbtack | angi | homeadvisor | yelp
+  externalContractorId String?   // contractor's ID on the external platform
+  accessToken          String?
+  refreshToken         String?
+  tokenExpiresAt       DateTime?
+  inboundEmail         String?   // unique inbound email for email-bridge
+  isActive             Boolean   @default(true)
+  lastSyncAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  contractor Contractor    @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  leads      ExternalLead[]
+
+  @@unique([contractorId, platform])
+}
+
+model ExternalLead {
+  id                 String    @id @default(cuid())
+  connectedAccountId String
+  contractorId       String
+  platform           String    // thumbtack | angi | email | manual
+  externalLeadId     String?   // platform's own lead/conversation ID
+  externalThreadId   String?
+  customerName       String?
+  customerPhone      String?
+  customerEmail      String?
+  serviceCategory    String?
+  description        String?
+  location           String?
+  budget             String?
+  status             String    @default("new") // new | responded | booked | closed
+  rawData            String?   // JSON of original webhook payload
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  connectedAccount ConnectedAccount  @relation(fields: [connectedAccountId], references: [id], onDelete: Cascade)
+  contractor       Contractor        @relation(fields: [contractorId], references: [id])
+  messages         ExternalMessage[]
+
+  @@unique([platform, externalLeadId])
+}
+
+model ExternalMessage {
+  id             String   @id @default(cuid())
+  leadId         String
+  direction      String   // inbound | outbound
+  senderName     String?
+  body           String
+  sentAt         DateTime @default(now())
+  deliveredAt    DateTime?
+  rawData        String?
+
+  lead ExternalLead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
 
 model Review {

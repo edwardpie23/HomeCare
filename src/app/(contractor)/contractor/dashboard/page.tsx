@@ -312,6 +312,24 @@ function DashboardContent() {
                     </div>
                   </button>
                 </Link>
+                <Link href="/contractor/inbox" className="block">
+                  <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all">
+                    <span className="text-2xl">📬</span>
+                    <div>
+                      <p className="font-medium text-slate-900 text-sm">Unified Inbox</p>
+                      <p className="text-slate-400 text-xs">Thumbtack, Angi &amp; more</p>
+                    </div>
+                  </button>
+                </Link>
+                <Link href="/contractor/settings/integrations" className="block">
+                  <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 border border-slate-100 text-left transition-all">
+                    <span className="text-2xl">🔌</span>
+                    <div>
+                      <p className="font-medium text-slate-900 text-sm">Integrations</p>
+                      <p className="text-slate-400 text-xs">Connect lead platforms</p>
+                    </div>
+                  </button>
+                </Link>
                 {bookings.filter(b => b.status !== "completed" && b.status !== "cancelled").length > 0 && (
                   bookings.filter(b => b.status !== "completed" && b.status !== "cancelled").slice(0,2).map(b => (
                     <Link key={b.id} href={`/contractor/bookings/${b.id}`} className="block">
